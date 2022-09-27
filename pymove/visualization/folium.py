@@ -29,6 +29,8 @@ from typing import Any, Sequence
 
 import folium
 import numpy as np
+import matplotlib
+from matplotlib import pyplot as plt
 from folium import Map, plugins
 from folium.plugins import FastMarkerCluster, HeatMap, HeatMapWithTime, MarkerCluster
 from pandas import DataFrame
@@ -922,6 +924,7 @@ def plot_trajectories(
     save_as_html: bool = False,
     color: str | list[str] | None = None,
     color_by_id: dict | None = None,
+    cmap: str | None = None,
     filename: str = 'plot_trajectories.html',
 ) -> Map:
     """
@@ -987,6 +990,21 @@ def plot_trajectories(
             default_zoom_start=zoom_start,
         )
 
+    if cmap is not None:
+        amount_colors = len(move_data['id'].unique())
+        if amount_colors == 2:
+            amount_colors = amount_colors + 1
+        colors_rgb = plt.get_cmap(cmap, amount_colors).colors
+        colors_hex = []
+
+        for line in colors_rgb:
+            c = []
+            for column in line:
+                c.append(column)
+            colors_hex.append(matplotlib.colors.to_hex([c[0], c[1], c[2], c[3]], keep_alpha=True))
+
+        color = colors_hex
+
     mv_df, items = _filter_and_generate_colors(
         move_data, n_rows=n_rows, color=color, color_by_id=color_by_id
     )
@@ -996,7 +1014,6 @@ def plot_trajectories(
     )
 
     return base_map
-
 
 def plot_trajectory_by_id(
     move_data: DataFrame,
@@ -1809,12 +1826,12 @@ def _circle_maker(
         fill=False
     ).add_to(map_)
 
-
 def plot_points(
     move_data: DataFrame,
     user_lat: str = LATITUDE,
     user_lon: str = LONGITUDE,
-    user_point: str = USER_POINT,
+    color: str = USER_POINT,
+    cmap: str | None = None,
     radius: float = 2,
     base_map: Map | None = None,
     slice_tags: list | None = None,
@@ -1867,8 +1884,6 @@ def plot_points(
     4   39.984217   116.319422   2008-10-23 05:53:21    1
     >>> plot_points(move_df)
     """
-    if slice_tags is None:
-        slice_tags = list(move_data.columns)
 
     # If not have a map a map is create with mean to lat and lon
     if not base_map:
@@ -1880,157 +1895,43 @@ def plot_points(
             lon_origin=initial_lon,
             tile=tiles
         )
+    
+    colors = color
 
+    if cmap is not None:
+        colors_rgb = plt.get_cmap(cmap, len(move_data)).colors
+        colors_hex = []
+
+        for line in colors_rgb:
+            c = []
+            for column in line:
+                c.append(column)
+            colors_hex.append(matplotlib.colors.to_hex([c[0], c[1], c[2], c[3]], keep_alpha=True))
+
+        colors = colors_hex
+
+    index = 0
     for row in move_data.iterrows():
+        if type(colors) is list:
+            c = colors[index]
+        else:
+            c = colors
+
         _circle_maker(
             row,
             user_lat,
             user_lon,
             slice_tags,
-            user_point,
+            c,
             radius,
             base_map
         )
 
+        index = index + 1
+
     if save_as_html:
         base_map.save(outfile=filename)
     return base_map
-
-
-def plot_poi(
-    move_data: DataFrame,
-    poi_lat: str = LATITUDE,
-    poi_lon: str = LONGITUDE,
-    poi_point: str = POI_POINT,
-    radius: float = 2,
-    base_map: Map | None = None,
-    slice_tags: list | None = None,
-    tiles: str = TILES[0],
-    save_as_html: bool = False,
-    filename: str = 'pois.html'
-) -> Map:
-    """
-    Receives a MoveDataFrame and returns a folium map with poi points.
-
-    Parameters
-    ----------
-    move_data: DataFrame
-        Trajectory input data
-    poi_lat: str, optional
-        Latitude column name, by default LATITUDE.
-    poi_lon: str, optional
-        Longitude column name, by default LONGITUDE.
-    poi_point: str, optional
-        Poi point color, by default POI_POINT.
-    radius: float, optional
-        radius size, by default 2.
-    base_map: Folium map, optional
-        A folium map to plot. If None a map. If None a map will be created,
-        by default None.
-    slice_tags: optional, by default None.
-    tiles: str, optional, by default TILES[0]
-        The map type.
-    save_as_html : bool, optional
-        Represents if want save this visualization in a new file .html, by default False.
-    filename : str, optional
-        Represents the file name of new file .html, by default 'pois.html'.
-
-    Returns
-    -------
-    folium.folium.Map.
-        Represents a folium map with visualization.
-
-    Examples
-    --------
-    >>> from pymove.visualization.folium import plot_poi
-    >>> move_df.head()
-              lat          lon              datetime   id
-    0   39.984094   116.319236   2008-10-23 05:53:05    1
-    1   39.984198   116.319322   2008-10-23 05:53:06    1
-    2   39.984224   116.319402   2008-10-23 05:53:11    1
-    3   39.984211   116.319389   2008-10-23 05:53:16    1
-    4   39.984217   116.319422   2008-10-23 05:53:21    1
-    >>> plot_poi(move_df)
-    """
-    return plot_points(
-        move_data,
-        user_lat=poi_lat,
-        user_lon=poi_lon,
-        user_point=poi_point,
-        radius=radius,
-        base_map=base_map,
-        slice_tags=slice_tags,
-        tiles=tiles,
-        save_as_html=save_as_html,
-        filename=filename
-    )
-
-
-def plot_event(
-    move_data: DataFrame,
-    event_lat: str = LATITUDE,
-    event_lon: str = LONGITUDE,
-    event_point: str = EVENT_POINT,
-    radius: float = 2,
-    base_map: Map | None = None,
-    slice_tags: list | None = None,
-    tiles: str = TILES[0],
-    save_as_html: bool = False,
-    filename: str = 'events.html'
-) -> Map:
-    """
-    Receives a MoveDataFrame and returns a folium map with events.
-
-    Parameters
-    ----------
-    move_data: DataFrame
-        Trajectory input data
-    event_lat: str, optional
-        Latitude column name, by default LATITUDE.
-    event_lon: str, optional
-        Longitude column name, by default LONGITUDE.
-    event_point: str, optional
-        Event color, by default EVENT_POI
-    radius: float, optional
-        radius size, by default 2.
-    base_map: Folium map, optional
-        A folium map to plot. If None a map. If None a map will be created,
-        by default None.
-    tiles: str, optional, by default TILES[0]
-    save_as_html : bool, optional
-        Represents if want save this visualization in a new file .html, by default False.
-    filename : str, optional
-        Represents the file name of new file .html, by default 'events.html'.
-
-    Returns
-    -------
-    A folium map.
-
-    Examples
-    --------
-    >>> from pymove.visualization.folium import plot_event
-    >>> move_df.head()
-              lat          lon              datetime   id
-    0   39.984094   116.319236   2008-10-23 05:53:05    1
-    1   39.984198   116.319322   2008-10-23 05:53:06    1
-    2   39.984224   116.319402   2008-10-23 05:53:11    1
-    3   39.984211   116.319389   2008-10-23 05:53:16    1
-    4   39.984217   116.319422   2008-10-23 05:53:21    1
-    >>> plot_event(move_df)
-    """
-    return plot_points(
-        move_data,
-        user_lat=event_lat,
-        user_lon=event_lon,
-        user_point=event_point,
-        radius=radius,
-        base_map=base_map,
-        slice_tags=slice_tags,
-        tiles=tiles,
-        save_as_html=save_as_html,
-        filename=filename
-    )
-
 
 def _create_geojson_features_line(
     move_data: DataFrame,
